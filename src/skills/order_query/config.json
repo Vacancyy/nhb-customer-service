@@ -1,0 +1,19 @@
+{
+  "name": "order_query",
+  "description": "销售订单查询 - 查询保单订单、购买记录、订单状态、支付信息等",
+  "triggerKeywords": ["订单", "保单", "购买记录", "支付状态", "到哪了", "发货", "订单号"],
+  "params": [
+    {
+      "name": "order_id",
+      "type": "string",
+      "required": false,
+      "description": "订单号"
+    },
+    {
+      "name": "query_type",
+      "type": "string",
+      "required": false,
+      "description": "查询类型：status(状态)/detail(详情)/list(列表)"
+    }
+  ]
+}

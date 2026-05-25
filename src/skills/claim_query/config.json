@@ -1,0 +1,19 @@
+{
+  "name": "claim_query",
+  "description": "理赔进度查询 - 查询理赔申请进度、理赔材料、理赔流程、理赔记录等",
+  "triggerKeywords": ["理赔", "理赔进度", "理赔材料", "理赔流程", "理赔单", "赔付", "申请理赔"],
+  "params": [
+    {
+      "name": "claim_id",
+      "type": "string",
+      "required": false,
+      "description": "理赔单号"
+    },
+    {
+      "name": "query_type",
+      "type": "string",
+      "required": false,
+      "description": "查询类型：progress(进度)/material(材料)/process(流程)/list(列表)"
+    }
+  ]
+}

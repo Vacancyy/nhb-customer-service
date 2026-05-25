@@ -1,0 +1,19 @@
+{
+  "name": "knowledge_query",
+  "description": "知识库查询 - 查询产品信息、保险条款、常见问题解答等",
+  "triggerKeywords": ["保什么", "保障范围", "条款", "投保条件", "理赔规则", "FAQ", "常见问题", "保险内容"],
+  "params": [
+    {
+      "name": "query",
+      "type": "string",
+      "required": true,
+      "description": "用户的查询内容"
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "required": false,
+      "description": "知识库分类：product(产品)/clause(条款)/faq(常见问题)"
+    }
+  ]
+}
