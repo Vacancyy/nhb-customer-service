@@ -1,32 +1,35 @@
 // 会话服务 - 处理用户会话和历史消息管理
 
-import { v4 as uuidv4 } from 'uuid';
-import { getHistory, saveMessage, HistoryMessage } from './redis';
+import { generateId } from './snowflake';
+import { getHistory, saveConversation, clearHistory, HistoryMessage } from './history';
 
 // 默认 channel
 export const DEFAULT_CHANNEL = 'default';
 
 export interface SessionContext {
-  userId: string;
+  userId: bigint;
   channel: string;
   isNewUser: boolean;
 }
 
 // 创建或获取用户会话
-export async function initSession(userId?: string, channel?: string): Promise<SessionContext> {
+export async function initSession(userId?: string | bigint, channel?: string): Promise<SessionContext> {
   const finalChannel = channel || DEFAULT_CHANNEL;
 
   if (userId) {
-    return { userId, channel: finalChannel, isNewUser: false };
+    // 如果传入的是字符串，转换为 bigint
+    const finalUserId = typeof userId === 'string' ? BigInt(userId) : userId;
+    return { userId: finalUserId, channel: finalChannel, isNewUser: false };
   }
 
-  const newUserId = uuidv4();
+  // 生成新的雪花 ID
+  const newUserId = generateId();
   return { userId: newUserId, channel: finalChannel, isNewUser: true };
 }
 
 // 构建发送给模型的完整消息列表（包含历史）
 export async function buildModelMessages(
-  userId: string,
+  userId: bigint,
   channel: string,
   systemPrompt: string,
   currentMessage: string
@@ -38,14 +41,12 @@ export async function buildModelMessages(
     { role: 'system', content: systemPrompt },
   ];
 
-  // 添加历史消息（过滤掉系统消息，因为已经重新设置了）
+  // 添加历史消息
   for (const msg of history) {
-    if (msg.role !== 'system') {
-      messages.push({
-        role: msg.role,
-        content: msg.content,
-      });
-    }
+    messages.push({
+      role: msg.role,
+      content: msg.content,
+    });
   }
 
   // 添加当前用户消息
@@ -54,31 +55,22 @@ export async function buildModelMessages(
   return messages;
 }
 
-// 保存用户消息到历史
-export async function saveUserMessage(userId: string, channel: string, content: string): Promise<void> {
-  await saveMessage(userId, channel, {
-    role: 'user',
-    content,
-    timestamp: Date.now(),
-  });
-}
-
-// 保存助手回复到历史
-export async function saveAssistantMessage(
-  userId: string,
+// 保存一次完整对话
+export async function saveConversationToHistory(
+  userId: bigint,
   channel: string,
-  content: string,
-  skill?: string
+  input: string,
+  output: string
 ): Promise<void> {
-  await saveMessage(userId, channel, {
-    role: 'assistant',
-    content,
-    timestamp: Date.now(),
-    skill,
-  });
+  await saveConversation(userId, channel, input, output);
 }
 
 // 获取用户历史会话记录
-export async function getUserHistory(userId: string, channel: string): Promise<HistoryMessage[]> {
+export async function getUserHistory(userId: bigint, channel: string): Promise<HistoryMessage[]> {
   return getHistory(userId, channel);
+}
+
+// 清空用户历史会话
+export async function clearUserHistory(userId: bigint, channel: string): Promise<void> {
+  await clearHistory(userId, channel);
 }

@@ -1,38 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserHistory, DEFAULT_CHANNEL } from '@/lib/session';
+import { getUserHistory, DEFAULT_CHANNEL, clearUserHistory } from '@/lib/session';
+import { AjaxResult } from '@/lib/AjaxResult';
+import { ERROR_MESSAGES } from '@/lib/prompts';
 
 // GET: 获取用户历史会话
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const userIdStr = searchParams.get('userId');
     const channel = searchParams.get('channel') || DEFAULT_CHANNEL;
 
-    if (!userId) {
-      return NextResponse.json(
-        { code: 400, msg: 'userId 参数必填', data: null },
-        { status: 400 }
-      );
+    if (!userIdStr) {
+      return NextResponse.json(AjaxResult.error(ERROR_MESSAGES.USER_ID_REQUIRED, 400));
     }
 
+    const userId = BigInt(userIdStr);
     const history = await getUserHistory(userId, channel);
 
-    return NextResponse.json({
-      code: 200,
-      msg: '',
-      data: {
-        userId,
+    return NextResponse.json(
+      AjaxResult.success({
+        userId: userIdStr,
         channel,
         history,
         total: history.length,
-      },
-    });
-  } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : '系统异常';
-    return NextResponse.json(
-      { code: 500, msg: errMsg, data: null },
-      { status: 500 }
+      })
     );
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : ERROR_MESSAGES.SYSTEM_ERROR;
+    return NextResponse.json(AjaxResult.error(errMsg));
   }
 }
 
@@ -40,30 +35,19 @@ export async function GET(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const userIdStr = searchParams.get('userId');
     const channel = searchParams.get('channel') || DEFAULT_CHANNEL;
 
-    if (!userId) {
-      return NextResponse.json(
-        { code: 400, msg: 'userId 参数必填', data: null },
-        { status: 400 }
-      );
+    if (!userIdStr) {
+      return NextResponse.json(AjaxResult.error(ERROR_MESSAGES.USER_ID_REQUIRED, 400));
     }
 
-    // 导入 clearHistory 函数
-    const { clearHistory } = await import('@/lib/redis');
-    await clearHistory(userId, channel);
+    const userId = BigInt(userIdStr);
+    await clearUserHistory(userId, channel);
 
-    return NextResponse.json({
-      code: 200,
-      msg: '历史会话已清空',
-      data: { userId, channel },
-    });
+    return NextResponse.json(AjaxResult.success({ userId: userIdStr, channel }, '历史会话已清空'));
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : '系统异常';
-    return NextResponse.json(
-      { code: 500, msg: errMsg, data: null },
-      { status: 500 }
-    );
+    const errMsg = error instanceof Error ? error.message : ERROR_MESSAGES.SYSTEM_ERROR;
+    return NextResponse.json(AjaxResult.error(errMsg));
   }
 }

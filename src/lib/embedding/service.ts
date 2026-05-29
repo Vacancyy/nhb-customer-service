@@ -37,7 +37,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     body: JSON.stringify({
       model: 'text-embedding-v3',
       input: text,
-      dimension: 1024,  // 阿里云最大支持 1024 维
     }),
   });
 
@@ -55,7 +54,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
-// 批量生成向量（最多支持 25 条文本）
+// 批量生成向量（最多支持 10 条文本，阿里云百炼限制）
 export async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
   if (!DASHSCOPE_API_KEY) {
     throw new Error('DASHSCOPE_API_KEY 未配置');
@@ -80,7 +79,6 @@ export async function generateEmbeddingBatch(texts: string[]): Promise<number[][
     body: JSON.stringify({
       model: 'text-embedding-v3',
       input: validTexts,
-      dimension: 1024,  // 阿里云最大支持 1024 维
     }),
   });
 

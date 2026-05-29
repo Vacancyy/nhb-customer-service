@@ -1,4 +1,12 @@
 // Skills 模块统一导出
 
-export { skillRegistry, type SkillDefinition, type SkillHandler, type SkillContext, type SkillSelectionResult } from './registry';
-export { loadAllSkills } from './loader';
+export {
+  toolRegistry,
+  type ToolDefinition,
+  type SkillDefinition,
+  type ToolCall,
+  type ToolResult,
+  type ToolHandler,
+  type ToolContext,
+} from './registry';
+export { loadAllTools } from './loader';

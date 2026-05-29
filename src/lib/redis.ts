@@ -7,6 +7,19 @@ const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
 const REDIS_DB = parseInt(process.env.REDIS_DB || '0');
 
+// ========== Redis Key 前缀常量（统一管理） ==========
+
+export const REDIS_KEY_PREFIX = {
+  // 历史会话: chat_history:{userId}:{channel}
+  HISTORY: 'chat_history:',
+  // 用户认证缓存: user_auth_cache:{userId}
+  USER_AUTH_CACHE: 'user_auth_cache:',
+  // 验证码 - 方法A（已实名）: verify_code_a:{phone}
+  VERIFY_CODE_A: 'verify_code_a:',
+  // 验证码 - 方法B（未实名）: verify_code_b:{phone}
+  VERIFY_CODE_B: 'verify_code_b:',
+};
+
 // Redis 客户端单例
 let redisClient: Redis | null = null;
 
@@ -32,7 +45,6 @@ function getRedisClient(): Redis {
 }
 
 // 历史会话 key 格式: chat_history:{userId}:{channel}
-const HISTORY_KEY_PREFIX = 'chat_history:';
 const MAX_HISTORY_LENGTH = 50; // 最多保存 50 条历史消息
 
 export interface HistoryMessage {
@@ -44,7 +56,7 @@ export interface HistoryMessage {
 
 // 构建 Redis key（包含 userId 和 channel）
 function buildHistoryKey(userId: string, channel: string): string {
-  return `${HISTORY_KEY_PREFIX}${userId}:${channel}`;
+  return `${REDIS_KEY_PREFIX.HISTORY}${userId}:${channel}`;
 }
 
 // 获取用户历史会话
@@ -106,6 +118,64 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
+  }
+}
+
+// ========== 用户认证信息缓存 ==========
+
+export interface UserAuthCache {
+  name: string;
+  idCard: string;
+  phone: string;
+}
+
+// 构建认证缓存 key
+function buildAuthCacheKey(userId: string): string {
+  return `${REDIS_KEY_PREFIX.USER_AUTH_CACHE}${userId}`;
+}
+
+// 保存用户认证信息到 Redis（24小时有效）
+export async function setUserAuthCache(
+  userId: string,
+  authInfo: UserAuthCache,
+  ttlSeconds: number = 24 * 60 * 60
+): Promise<void> {
+  const client = getRedisClient();
+  const key = buildAuthCacheKey(userId);
+
+  try {
+    await client.setex(key, ttlSeconds, JSON.stringify(authInfo));
+  } catch (error) {
+    console.error('Failed to set user auth cache:', error);
+  }
+}
+
+// 从 Redis 获取用户认证信息
+export async function getUserAuthCache(userId: string): Promise<UserAuthCache | null> {
+  const client = getRedisClient();
+  const key = buildAuthCacheKey(userId);
+
+  try {
+    const data = await client.get(key);
+    if (!data) {
+      return null;
+    }
+    return JSON.parse(data) as UserAuthCache;
+  } catch (error) {
+    console.error('Failed to get user auth cache:', error);
+    return null;
+  }
+}
+
+// 删除用户认证缓存
+export async function deleteUserAuthCache(userId: string): Promise<void> {
+  const client = getRedisClient();
+  const key = buildAuthCacheKey(userId);
+
+  try {
+    await client.del(key);
+  } catch (error) {
+    console.error('Failed to delete user auth cache:', error);
   }
 }
 

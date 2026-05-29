@@ -1,16 +1,19 @@
-// 知识库 CRUD 服务
+// 知识库 CRUD 服务（跨期版）
 
-import { query, queryOne } from '../postgres';
+import { query, queryOne, getClient } from '../postgres';
 import { generateEmbedding } from '../embedding';
 import { DEFAULT_TOPK, MIN_SIMILARITY, getValidTopK } from './config';
 import {
   KnowledgeEntry,
+  KnowledgeAnswer,
   CreateKnowledgeInput,
+  CreateKnowledgeAnswerInput,
   UpdateKnowledgeInput,
   KnowledgeQueryParams,
 } from './types';
 
-const TABLE_NAME = 'knowledge_entries';
+const TABLE_ENTRIES = 'knowledge_entries';
+const TABLE_ANSWERS = 'knowledge_answers';
 
 // VECTOR 类型转换辅助函数
 function formatVector(embedding: number[] | null): string | null {
@@ -26,54 +29,113 @@ function parseVector(embeddingStr: string | null): number[] | null {
   return cleaned.split(',').map(Number);
 }
 
-function parseJsonData(data: any): Record<string, any> {
-  // pg 库对 JSONB 类型已自动解析为对象
-  if (!data) return {};
-  if (typeof data === 'object') return data;
-  if (typeof data === 'string') return JSON.parse(data);
-  return {};
+// PostgreSQL 数组类型转换
+function parseArray(arr: any): string[] | null {
+  if (!arr) return null;
+  if (Array.isArray(arr)) return arr;
+  return null;
 }
 
-// 创建知识条目
+// 创建知识条目（含跨期答案）
 export async function createKnowledge(
   input: CreateKnowledgeInput
 ): Promise<KnowledgeEntry> {
-  const sql = `
-    INSERT INTO ${TABLE_NAME} (topic, question, embedding, structured_data, category)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *
-  `;
-  const params = [
-    input.topic,
-    input.question,
-    formatVector(input.embedding ?? null),
-    JSON.stringify(input.structured_data),
-    input.category || null,
-  ];
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-  const row = await queryOne<KnowledgeEntry>(sql, params);
-  if (!row) {
-    throw new Error('创建知识条目失败');
+    // 插入主表
+    const entrySql = `
+      INSERT INTO ${TABLE_ENTRIES} (
+        source_id, std_question, retrieval_text, category, intent, scene,
+        answer_mode, requires_verification, requires_business_confirm,
+        similar_questions, keywords, channels
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `;
+    const entryResult = await client.query(entrySql, [
+      input.source_id || null,
+      input.std_question,
+      input.retrieval_text || null,
+      input.category || null,
+      input.intent || null,
+      input.scene || null,
+      input.answer_mode || null,
+      input.requires_verification || null,
+      input.requires_business_confirm || false,
+      input.similar_questions || [],
+      input.keywords || [],
+      input.channels || [],
+    ]);
+    const entry = entryResult.rows[0];
+    const knowledgeId = entry.id;
+
+    // 插入跨期答案
+    if (input.answers && input.answers.length > 0) {
+      for (const ans of input.answers) {
+        const answerSql = `
+          INSERT INTO ${TABLE_ANSWERS} (
+            knowledge_id, period, answer, source, std_question_period, valid_from, valid_to
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `;
+        await client.query(answerSql, [
+          knowledgeId,
+          ans.period,
+          ans.answer,
+          ans.source || null,
+          ans.std_question_period || null,
+          ans.valid_from || null,
+          ans.valid_to || null,
+        ]);
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...entry,
+      similar_questions: parseArray(entry.similar_questions),
+      keywords: parseArray(entry.keywords),
+      channels: parseArray(entry.channels),
+      embedding: parseVector(entry.embedding),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-
-  return {
-    ...row,
-    embedding: parseVector(row.embedding as unknown as string),
-    structured_data: parseJsonData(row.structured_data as unknown as string),
-  };
 }
 
-// 根据 ID 获取知识条目
-export async function getKnowledgeById(id: string): Promise<KnowledgeEntry | null> {
-  const sql = `SELECT * FROM ${TABLE_NAME} WHERE id = $1`;
-  const row = await queryOne<KnowledgeEntry>(sql, [id]);
+// 根据 ID 获取知识条目（含跨期答案）
+export async function getKnowledgeById(
+  id: string,
+  period?: number
+): Promise<KnowledgeEntry | null> {
+  // 查询主表
+  const entrySql = `SELECT * FROM ${TABLE_ENTRIES} WHERE id = $1`;
+  const entryRow = await queryOne<KnowledgeEntry>(entrySql, [id]);
 
-  if (!row) return null;
+  if (!entryRow) return null;
+
+  // 查询答案表
+  let answersSql = `SELECT * FROM ${TABLE_ANSWERS} WHERE knowledge_id = $1`;
+  const params: any[] = [id];
+  if (period) {
+    answersSql += ` AND period = $2`;
+    params.push(period);
+  }
+  answersSql += ` ORDER BY period DESC`;
+
+  const answersRows = await query<KnowledgeAnswer>(answersSql, params);
 
   return {
-    ...row,
-    embedding: parseVector(row.embedding as unknown as string),
-    structured_data: parseJsonData(row.structured_data as unknown as string),
+    ...entryRow,
+    similar_questions: parseArray(entryRow.similar_questions),
+    keywords: parseArray(entryRow.keywords),
+    channels: parseArray(entryRow.channels),
+    embedding: parseVector(entryRow.embedding as unknown as string),
+    answers: answersRows,
   };
 }
 
@@ -81,7 +143,7 @@ export async function getKnowledgeById(id: string): Promise<KnowledgeEntry | nul
 export async function listKnowledge(
   params: KnowledgeQueryParams
 ): Promise<{ data: KnowledgeEntry[]; total: number }> {
-  const { page = 1, pageSize = 10, category, topic, keyword } = params;
+  const { page = 1, pageSize = 10, category, intent, keyword, period } = params;
   const offset = (page - 1) * pageSize;
 
   // 构建 WHERE 条件
@@ -93,36 +155,61 @@ export async function listKnowledge(
     conditions.push(`category = $${paramIndex++}`);
     queryParams.push(category);
   }
-  if (topic) {
-    conditions.push(`topic LIKE $${paramIndex++}`);
-    queryParams.push(`%${topic}%`);
+  if (intent) {
+    conditions.push(`intent = $${paramIndex++}`);
+    queryParams.push(intent);
   }
   if (keyword) {
-    conditions.push(`question LIKE $${paramIndex++}`);
+    conditions.push(`(std_question LIKE $${paramIndex} OR retrieval_text LIKE $${paramIndex})`);
     queryParams.push(`%${keyword}%`);
+    paramIndex++;
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   // 查询总数
-  const countSql = `SELECT COUNT(*) as total FROM ${TABLE_NAME} ${whereClause}`;
+  const countSql = `SELECT COUNT(*) as total FROM ${TABLE_ENTRIES} ${whereClause}`;
   const countRow = await queryOne<{ total: number }>(countSql, queryParams);
   const total = countRow?.total || 0;
 
   // 查询数据
   const dataSql = `
-    SELECT * FROM ${TABLE_NAME}
+    SELECT e.*, COALESCE(a.answers, '[]') as answers
+    FROM ${TABLE_ENTRIES} e
+    LEFT JOIN (
+      SELECT knowledge_id, json_agg(json_build_object(
+        'id', id,
+        'knowledge_id', knowledge_id,
+        'period', period,
+        'answer', answer,
+        'source', source,
+        'std_question_period', std_question_period,
+        'valid_from', valid_from,
+        'valid_to', valid_to
+      )) as answers
+      FROM ${TABLE_ANSWERS}
+      ${period ? `WHERE period = $${paramIndex}` : ''}
+      GROUP BY knowledge_id
+    ) a ON e.id = a.knowledge_id
     ${whereClause}
-    ORDER BY updated_at DESC
-    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    ORDER BY e.updated_at DESC
+    LIMIT $${paramIndex + (period ? 1 : 0)} OFFSET $${paramIndex + (period ? 1 : 0) + 1}
   `;
-  const rows = await query<KnowledgeEntry>(dataSql, [...queryParams, pageSize, offset]);
+
+  const limitParams = [...queryParams];
+  if (period) limitParams.push(period);
+  limitParams.push(pageSize, offset);
+
+  const rows = await query<any>(dataSql, limitParams);
 
   // 转换数据
   const data = rows.map((row) => ({
     ...row,
-    embedding: parseVector(row.embedding as unknown as string),
-    structured_data: parseJsonData(row.structured_data as unknown as string),
+    similar_questions: parseArray(row.similar_questions),
+    keywords: parseArray(row.keywords),
+    channels: parseArray(row.channels),
+    embedding: parseVector(row.embedding),
+    answers: (row.answers || []).sort((a: KnowledgeAnswer, b: KnowledgeAnswer) => b.period - a.period),
   }));
 
   return { data, total };
@@ -137,25 +224,57 @@ export async function updateKnowledge(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (input.topic !== undefined) {
-    updateFields.push(`topic = $${paramIndex++}`);
-    params.push(input.topic);
+  if (input.source_id !== undefined) {
+    updateFields.push(`source_id = $${paramIndex++}`);
+    params.push(input.source_id);
   }
-  if (input.question !== undefined) {
-    updateFields.push(`question = $${paramIndex++}`);
-    params.push(input.question);
+  if (input.std_question !== undefined) {
+    updateFields.push(`std_question = $${paramIndex++}`);
+    params.push(input.std_question);
   }
-  if (input.embedding !== undefined) {
-    updateFields.push(`embedding = $${paramIndex++}`);
-    params.push(formatVector(input.embedding));
-  }
-  if (input.structured_data !== undefined) {
-    updateFields.push(`structured_data = $${paramIndex++}`);
-    params.push(JSON.stringify(input.structured_data));
+  if (input.retrieval_text !== undefined) {
+    updateFields.push(`retrieval_text = $${paramIndex++}`);
+    params.push(input.retrieval_text);
   }
   if (input.category !== undefined) {
     updateFields.push(`category = $${paramIndex++}`);
     params.push(input.category);
+  }
+  if (input.intent !== undefined) {
+    updateFields.push(`intent = $${paramIndex++}`);
+    params.push(input.intent);
+  }
+  if (input.scene !== undefined) {
+    updateFields.push(`scene = $${paramIndex++}`);
+    params.push(input.scene);
+  }
+  if (input.answer_mode !== undefined) {
+    updateFields.push(`answer_mode = $${paramIndex++}`);
+    params.push(input.answer_mode);
+  }
+  if (input.requires_verification !== undefined) {
+    updateFields.push(`requires_verification = $${paramIndex++}`);
+    params.push(input.requires_verification);
+  }
+  if (input.requires_business_confirm !== undefined) {
+    updateFields.push(`requires_business_confirm = $${paramIndex++}`);
+    params.push(input.requires_business_confirm);
+  }
+  if (input.similar_questions !== undefined) {
+    updateFields.push(`similar_questions = $${paramIndex++}`);
+    params.push(input.similar_questions);
+  }
+  if (input.keywords !== undefined) {
+    updateFields.push(`keywords = $${paramIndex++}`);
+    params.push(input.keywords);
+  }
+  if (input.channels !== undefined) {
+    updateFields.push(`channels = $${paramIndex++}`);
+    params.push(input.channels);
+  }
+  if (input.embedding !== undefined) {
+    updateFields.push(`embedding = $${paramIndex++}`);
+    params.push(formatVector(input.embedding));
   }
 
   if (updateFields.length === 0) {
@@ -166,7 +285,7 @@ export async function updateKnowledge(
   params.push(id);
 
   const sql = `
-    UPDATE ${TABLE_NAME}
+    UPDATE ${TABLE_ENTRIES}
     SET ${updateFields.join(', ')}
     WHERE id = $${paramIndex}
     RETURNING *
@@ -177,14 +296,16 @@ export async function updateKnowledge(
 
   return {
     ...row,
+    similar_questions: parseArray(row.similar_questions),
+    keywords: parseArray(row.keywords),
+    channels: parseArray(row.channels),
     embedding: parseVector(row.embedding as unknown as string),
-    structured_data: parseJsonData(row.structured_data as unknown as string),
   };
 }
 
-// 删除知识条目
+// 删除知识条目（级联删除答案）
 export async function deleteKnowledge(id: string): Promise<boolean> {
-  const sql = `DELETE FROM ${TABLE_NAME} WHERE id = $1 RETURNING id`;
+  const sql = `DELETE FROM ${TABLE_ENTRIES} WHERE id = $1 RETURNING id`;
   const row = await queryOne<{ id: string }>(sql, [id]);
   return row !== null;
 }
@@ -192,7 +313,7 @@ export async function deleteKnowledge(id: string): Promise<boolean> {
 // 批量删除知识条目
 export async function deleteKnowledgeBatch(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
-  const sql = `DELETE FROM ${TABLE_NAME} WHERE id = ANY($1) RETURNING id`;
+  const sql = `DELETE FROM ${TABLE_ENTRIES} WHERE id = ANY($1) RETURNING id`;
   const rows = await query<{ id: string }>(sql, [ids]);
   return rows.length;
 }
@@ -201,7 +322,7 @@ export async function deleteKnowledgeBatch(ids: string[]): Promise<number> {
 export async function countByCategory(): Promise<Record<string, number>> {
   const sql = `
     SELECT category, COUNT(*) as count
-    FROM ${TABLE_NAME}
+    FROM ${TABLE_ENTRIES}
     WHERE category IS NOT NULL
     GROUP BY category
     ORDER BY count DESC
@@ -213,25 +334,38 @@ export async function countByCategory(): Promise<Record<string, number>> {
   }, {} as Record<string, number>);
 }
 
-// 根据 ID 查询数据并对 topic 进行向量化，保存到数据库
+// 按意图统计数量
+export async function countByIntent(): Promise<Record<string, number>> {
+  const sql = `
+    SELECT intent, COUNT(*) as count
+    FROM ${TABLE_ENTRIES}
+    WHERE intent IS NOT NULL
+    GROUP BY intent
+    ORDER BY count DESC
+  `;
+  const rows = await query<{ intent: string; count: number }>(sql);
+  return rows.reduce((acc, row) => {
+    acc[row.intent] = row.count;
+    return acc;
+  }, {} as Record<string, number>);
+}
+
+// 根据 ID 查询数据并对 retrieval_text 进行向量化
 export async function embedKnowledgeById(id: string): Promise<KnowledgeEntry | null> {
-  // 1. 查询知识条目
   const entry = await getKnowledgeById(id);
   if (!entry) {
     throw new Error('知识条目不存在');
   }
 
-  // 2. 对 topic 进行向量化
-  console.log(`正在对 topic "${entry.topic}" 进行向量化...`);
-  const embedding = await generateEmbedding(entry.topic);
+  const textToEmbed = entry.retrieval_text || entry.std_question;
+  console.log(`正在对 "${textToEmbed}" 进行向量化...`);
+  const embedding = await generateEmbedding(textToEmbed);
   console.log(`向量化完成，维度: ${embedding.length}`);
 
-  // 3. 更新数据库保存向量
-  const updatedEntry = await updateKnowledge(id, { embedding });
-  return updatedEntry;
+  return updateKnowledge(id, { embedding });
 }
 
-// 批量向量化：对指定 IDs 的知识条目进行向量化
+// 批量向量化
 export async function embedKnowledgeBatch(ids: string[]): Promise<{ success: number; failed: number; errors: string[] }> {
   const result = { success: 0, failed: 0, errors: [] as string[] };
 
@@ -251,8 +385,7 @@ export async function embedKnowledgeBatch(ids: string[]): Promise<{ success: num
 
 // 对所有没有向量的知识条目进行批量向量化
 export async function embedAllMissingVectors(): Promise<{ processed: number; failed: number; errors: string[] }> {
-  // 查询 embedding 为空的记录
-  const sql = `SELECT id FROM ${TABLE_NAME} WHERE embedding IS NULL`;
+  const sql = `SELECT id FROM ${TABLE_ENTRIES} WHERE embedding IS NULL`;
   const rows = await query<{ id: string }>(sql);
 
   if (rows.length === 0) {
@@ -269,44 +402,92 @@ export async function embedAllMissingVectors(): Promise<{ processed: number; fai
   };
 }
 
-// 向量相似度搜索：根据问题文本查找最相似的知识条目
+// 向量相似度搜索：根据问题文本查找最相似的知识条目（含跨期答案）
 export async function searchKnowledgeByQuestion(
   question: string,
-  topK?: number
+  topK?: number,
+  period?: number
 ): Promise<(KnowledgeEntry & { similarity: number })[]> {
   // 1. 对问题进行向量化
   const embedding = await generateEmbedding(question);
   const embeddingStr = formatVector(embedding);
 
-  // 2. 获取有效的 topK 值（从配置）
+  // 2. 获取有效的 topK 值
   const validTopK = getValidTopK(topK);
 
-  // 3. 使用 pgvector 的余弦相似度查询
-  // 过滤相似度低于阈值的结果
+  // 3. 使用 pgvector 的余弦相似度查询，JOIN 答案表
   const sql = `
-    SELECT *,
-      1 - (embedding <=> $1) as similarity
-    FROM ${TABLE_NAME}
-    WHERE embedding IS NOT NULL
-      AND 1 - (embedding <=> $1) >= $3
-    ORDER BY embedding <=> $1
+    SELECT e.*,
+      COALESCE(a.answers, '[]') as answers,
+      1 - (e.embedding <=> $1) as similarity
+    FROM ${TABLE_ENTRIES} e
+    LEFT JOIN (
+      SELECT knowledge_id, json_agg(json_build_object(
+        'id', id,
+        'knowledge_id', knowledge_id,
+        'period', period,
+        'answer', answer,
+        'source', source,
+        'std_question_period', std_question_period,
+        'valid_from', valid_from,
+        'valid_to', valid_to
+      )) as answers
+      FROM ${TABLE_ANSWERS}
+      ${period ? `WHERE period = $4` : ''}
+      GROUP BY knowledge_id
+    ) a ON e.id = a.knowledge_id
+    WHERE e.embedding IS NOT NULL
+      AND 1 - (e.embedding <=> $1) >= $3
+    ORDER BY e.embedding <=> $1
     LIMIT $2
   `;
 
-  // <=> 是余弦距离运算符，值越小越相似
-  // 1 - <=> 得到相似度分数（范围 0-1）
-  // 参数：$1=向量, $2=topK, $3=最小相似度阈值
-  const rows = await query<KnowledgeEntry & { similarity: number }>(sql, [
-    embeddingStr,
-    validTopK,
-    MIN_SIMILARITY,
-  ]);
+  const params: any[] = [embeddingStr, validTopK, MIN_SIMILARITY];
+  if (period) params.push(period);
+
+  const rows = await query<any>(sql, params);
 
   // 4. 转换数据格式
   return rows.map((row) => ({
     ...row,
-    embedding: parseVector(row.embedding as unknown as string),
-    structured_data: parseJsonData(row.structured_data as unknown as string),
+    similar_questions: parseArray(row.similar_questions),
+    keywords: parseArray(row.keywords),
+    channels: parseArray(row.channels),
+    embedding: parseVector(row.embedding),
+    answers: (row.answers || []).sort((a: KnowledgeAnswer, b: KnowledgeAnswer) => b.period - a.period),
     similarity: row.similarity,
   }));
+}
+
+// 根据期数获取答案
+export async function getAnswerByPeriod(
+  knowledgeId: string,
+  period: number
+): Promise<KnowledgeAnswer | null> {
+  const sql = `
+    SELECT * FROM ${TABLE_ANSWERS}
+    WHERE knowledge_id = $1 AND period = $2
+  `;
+  return queryOne<KnowledgeAnswer>(sql, [knowledgeId, period]);
+}
+
+// 获取所有期数答案
+export async function getAllAnswers(knowledgeId: string): Promise<KnowledgeAnswer[]> {
+  const sql = `
+    SELECT * FROM ${TABLE_ANSWERS}
+    WHERE knowledge_id = $1
+    ORDER BY period DESC
+  `;
+  return query<KnowledgeAnswer>(sql, [knowledgeId]);
+}
+
+// 检查数据库是否有向量能力
+export async function checkVectorCapability(): Promise<boolean> {
+  try {
+    const sql = `SELECT 1 FROM pg_extension WHERE extname = 'vector'`;
+    const result = await queryOne(sql);
+    return result !== null;
+  } catch {
+    return false;
+  }
 }
