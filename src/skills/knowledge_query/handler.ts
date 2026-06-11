@@ -11,53 +11,61 @@ const handler: ToolHandler = async (args: Record<string, any>, context: ToolCont
 
   logInfo('[knowledge_query] called', { userId: context.userId, query, period });
 
-  // 调用知识库向量搜索
-  const results = await searchKnowledgeByQuestion(query, undefined, period);
+  try {
+    // 调用知识库向量搜索
+    const results = await searchKnowledgeByQuestion(query, undefined, period);
 
-  if (results.length === 0) {
-    return `${ERROR_MESSAGES.KNOWLEDGE_NOT_FOUND}。【请直接告知用户，不要再调用工具】`;
-  }
+    if (results.length === 0) {
+      return `${ERROR_MESSAGES.KNOWLEDGE_NOT_FOUND}。【请直接告知用户，不要再调用工具】`;
+    }
 
-  // 格式化搜索结果，包含跨期答案
-  const knowledgeContext = results
-    .map((r, i) => {
-      // 构建答案部分
-      let answerSection = '';
-      if (r.answers && r.answers.length > 0) {
-        answerSection = r.answers
-          .map((a) => `【第${a.period}期】\n答案: ${a.answer}\n来源: ${a.source || '未知'}`)
-          .join('\n');
-      } else {
-        answerSection = '（无跨期答案）';
-      }
+    // 格式化搜索结果，包含跨期答案 - 优化格式让LLM更容易理解
+    const knowledgeContext = results
+      .map((r, i) => {
+        // 构建答案部分 - 突出显示答案内容
+        let answerSection = '';
+        if (r.answers && r.answers.length > 0) {
+          answerSection = r.answers
+            .map((a) => `【第${a.period}期答案 - 请直接引用此内容回答用户】\n${a.answer}\n（来源: ${a.source || '知识库'}）`)
+            .join('\n');
+        } else {
+          answerSection = '（无跨期答案）';
+        }
 
-      // 构建相似问题部分
-      const similarSection = r.similar_questions && r.similar_questions.length > 0
-        ? `相似问题: ${r.similar_questions.join(', ')}`
-        : '';
+        // 构建关键词部分 - 提醒LLM必须包含这些关键词
+        const keywordsSection = r.keywords && r.keywords.length > 0
+          ? `【必须包含的关键词】: ${r.keywords.join(', ')}`
+          : '';
 
-      // 构建关键词部分
-      const keywordsSection = r.keywords && r.keywords.length > 0
-        ? `关键词: ${r.keywords.join(', ')}`
-        : '';
+        // 构建相似问题部分
+        const similarSection = r.similar_questions && r.similar_questions.length > 0
+          ? `相似问题: ${r.similar_questions.join(', ')}`
+          : '';
 
-      return `[${i + 1}] 标准问题: ${r.std_question}
-分类: ${r.category || '未分类'}
-意图: ${r.intent || '未标记'}
-场景: ${r.scene || '未标记'}
-答案模式: ${r.answer_mode || '未指定'}
-需核实: ${r.requires_verification || '未指定'}
-${similarSection}
+        return `━━━ 知识库匹配结果 #${i + 1} ━━━
+标准问题: ${r.std_question}
 ${keywordsSection}
+${similarSection}
 
-跨期答案:
 ${answerSection}
 
-相似度: ${r.similarity.toFixed(2)}`;
-    })
-    .join('\n\n');
+匹配相似度: ${r.similarity.toFixed(2)} (${r.similarity >= 0.8 ? '高度匹配' : r.similarity >= 0.6 ? '中度匹配' : '基本匹配'})`;
+      })
+      .join('\n\n');
 
-  return `找到 ${results.length} 条相关知识:\n\n${knowledgeContext}`;
+    // 添加明确的回答指引
+    const answerGuidance = `
+【回答指引】
+1. 请使用第一条匹配结果的答案内容直接回答用户问题
+2. 必须包含"必须包含的关键词"中的所有关键词
+3. 不要对答案进行概括或省略，保持答案完整性
+`;
+
+    return `✅ 找到 ${results.length} 条相关知识:\n\n${knowledgeContext}\n\n${answerGuidance}`;
+  } catch (error) {
+    logError('[knowledge_query] 错误', { error: error instanceof Error ? error.message : String(error) });
+    return `${ERROR_MESSAGES.KNOWLEDGE_NOT_FOUND}。【请直接告知用户，不要再调用工具】`;
+  }
 };
 
 export default handler;

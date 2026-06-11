@@ -1,11 +1,8 @@
 // Redis 服务 - 用于存储历史会话数据
+// 延迟读取环境变量，确保 .env 已加载
 
 import Redis from 'ioredis';
-
-const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
-const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
-const REDIS_DB = parseInt(process.env.REDIS_DB || '0');
+import { logError, logInfo } from './logger';
 
 // ========== Redis Key 前缀常量（统一管理） ==========
 
@@ -18,27 +15,40 @@ export const REDIS_KEY_PREFIX = {
   VERIFY_CODE_A: 'verify_code_a:',
   // 验证码 - 方法B（未实名）: verify_code_b:{phone}
   VERIFY_CODE_B: 'verify_code_b:',
+  // 三要素认证数据: three_elements_data:{phone}
+  THREE_ELEMENTS_DATA: 'three_elements_data:',
+  // 系统配置开关
+  SYSTEM_CONFIG: 'system_config:',
+  // 系统提示词配置
+  PROMPT_CONFIG: 'prompt_config:',
 };
 
 // Redis 客户端单例
 let redisClient: Redis | null = null;
 
+function getRedisConfig() {
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB || '0'),
+  };
+}
+
 function getRedisClient(): Redis {
   if (!redisClient) {
+    const config = getRedisConfig();
     redisClient = new Redis({
-      host: REDIS_HOST,
-      port: REDIS_PORT,
-      password: REDIS_PASSWORD,
-      db: REDIS_DB,
+      ...config,
       lazyConnect: true, // 延迟连接，首次使用时才连接
     });
 
     redisClient.on('error', (err) => {
-      console.error('Redis connection error:', err);
+      logError('Redis connection error', err);
     });
 
     redisClient.on('connect', () => {
-      console.log('Redis connected successfully');
+      logInfo('Redis connected successfully', { host: config.host, port: config.port });
     });
   }
   return redisClient;
@@ -71,7 +81,7 @@ export async function getHistory(userId: string, channel: string): Promise<Histo
     }
     return JSON.parse(data) as HistoryMessage[];
   } catch (error) {
-    console.error('Failed to get history:', error);
+    logError('获取历史会话失败', error);
     return [];
   }
 }
@@ -97,7 +107,7 @@ export async function saveMessage(
     // 设置过期时间为 7 天
     await client.setex(key, 7 * 24 * 60 * 60, JSON.stringify(history));
   } catch (error) {
-    console.error('Failed to save message:', error);
+    logError('保存消息到历史会话失败', error);
   }
 }
 
@@ -109,7 +119,7 @@ export async function clearHistory(userId: string, channel: string): Promise<voi
   try {
     await client.del(key);
   } catch (error) {
-    console.error('Failed to clear history:', error);
+    logError('清空历史会话失败', error);
   }
 }
 
@@ -146,7 +156,7 @@ export async function setUserAuthCache(
   try {
     await client.setex(key, ttlSeconds, JSON.stringify(authInfo));
   } catch (error) {
-    console.error('Failed to set user auth cache:', error);
+    logError('设置用户认证缓存失败', error);
   }
 }
 
@@ -162,7 +172,7 @@ export async function getUserAuthCache(userId: string): Promise<UserAuthCache | 
     }
     return JSON.parse(data) as UserAuthCache;
   } catch (error) {
-    console.error('Failed to get user auth cache:', error);
+    logError('获取用户认证缓存失败', error);
     return null;
   }
 }
@@ -175,7 +185,7 @@ export async function deleteUserAuthCache(userId: string): Promise<void> {
   try {
     await client.del(key);
   } catch (error) {
-    console.error('Failed to delete user auth cache:', error);
+    logError('删除用户认证缓存失败', error);
   }
 }
 

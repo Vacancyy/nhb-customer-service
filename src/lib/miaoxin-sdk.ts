@@ -9,6 +9,30 @@ const MIAOXIN_SERVER = process.env.MIAOXIN_SERVER || '';
 const MIAOXIN_ACCOUNT = process.env.MIAOXIN_ACCOUNT || '';
 const MIAOXIN_SECRET = process.env.MIAOXIN_SECRET || '';
 
+// 判断是否为本地环境（本地环境不发送短信）
+function isLocalEnvironment(): boolean {
+  // 通过 APP_ENV 环境变量判断（更灵活）
+  // local/development = 本地环境，不发送短信
+  // stage/production = 测试/生产环境，发送短信
+  const appEnv = process.env.APP_ENV || '';
+  if (appEnv === 'local' || appEnv === 'development') {
+    return true;
+  }
+  // 如果设置了 APP_ENV 为 stage 或 prod，则发送短信
+  if (appEnv === 'stage' || appEnv === 'prod') {
+    return false;
+  }
+  // 默认：未设置 APP_ENV 时，根据 NODE_ENV 判断
+  // 但 TypeScript 限制了 NODE_ENV 类型，所以默认返回 true（本地环境）
+  return true;
+}
+
+// 模拟发送短信结果
+function mockSendResult(mobiles: string, content: string): SendResult {
+  logInfo('[Miaoxin] 本地环境模拟发送短信', { mobiles, content });
+  return { code: 0, msg: '本地环境模拟发送成功', orderId: 'mock-order-id' };
+}
+
 // 接口路径
 const API_PATHS = {
   SEND: '/sms/send',
@@ -103,10 +127,9 @@ export async function sendSMS(
     throw new Error('秒信短信配置缺失，请检查环境变量 MIAOXIN_SERVER、MIAOXIN_ACCOUNT、MIAOXIN_SECRET');
   }
 
-  // 非生产环境不实际发送短信
-  if (process.env.NODE_ENV !== 'production') {
-    logInfo('[Miaoxin] 开发环境模拟发送短信', { mobiles, content });
-    return { code: 0, msg: '开发环境模拟发送成功', orderId: 'mock-order-id' };
+  // 本地环境不发送短信，返回模拟结果
+  if (isLocalEnvironment()) {
+    return mockSendResult(mobiles, content);
   }
 
   const params: Record<string, string> = {
@@ -153,6 +176,11 @@ export async function sendFixedSignatureSMS(
     throw new Error('秒信短信配置缺失');
   }
 
+  // 本地环境不发送短信，返回模拟结果
+  if (isLocalEnvironment()) {
+    return mockSendResult(mobiles, content);
+  }
+
   const params: Record<string, string> = {
     mobiles,
     content,
@@ -195,6 +223,11 @@ export async function sendTemplateSMS(
 
   if (!server || !account || !secret) {
     throw new Error('秒信短信配置缺失');
+  }
+
+  // 本地环境不发送短信，返回模拟结果
+  if (isLocalEnvironment()) {
+    return mockSendResult(mobiles, `模板:${templateId}, 参数:${params.join(',')}`);
   }
 
   const requestParams: Record<string, string> = {

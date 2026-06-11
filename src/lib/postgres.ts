@@ -1,35 +1,40 @@
 // PostgreSQL 数据库连接服务
+// 延迟读取环境变量，确保 .env 已加载
 
 import { Pool, PoolClient } from 'pg';
-
-const PG_HOST = process.env.PG_HOST || 'localhost';
-const PG_PORT = parseInt(process.env.PG_PORT || '5432');
-const PG_DATABASE = process.env.PG_DATABASE || 'nhb_customer_service';
-const PG_USER = process.env.PG_USER || 'postgres';
-const PG_PASSWORD = process.env.PG_PASSWORD || '';
+import { logError, logInfo } from './logger';
 
 // 连接池单例
 let pool: Pool | null = null;
 
+function getPoolConfig() {
+  return {
+    host: process.env.PG_HOST || 'localhost',
+    port: parseInt(process.env.PG_PORT || '5432'),
+    database: process.env.PG_DATABASE || 'nhb_customer_service',
+    user: process.env.PG_USER || 'postgres',
+    password: process.env.PG_PASSWORD || '',
+  };
+}
+
 function getPool(): Pool {
   if (!pool) {
+    const config = getPoolConfig();
     pool = new Pool({
-      host: PG_HOST,
-      port: PG_PORT,
-      database: PG_DATABASE,
-      user: PG_USER,
-      password: PG_PASSWORD,
+      ...config,
       max: 10, // 最大连接数
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
 
     pool.on('error', (err) => {
-      console.error('PostgreSQL pool error:', err);
+      logError('PostgreSQL pool error', err);
     });
 
-    pool.on('connect', () => {
-      console.log('PostgreSQL connected successfully');
+    pool.on('connect', async (client) => {
+      logInfo('PostgreSQL connected successfully');
+      // 设置时区为北京时间
+      await client.query("SET TIME ZONE 'Asia/Shanghai'");
     });
   }
   return pool;

@@ -25,7 +25,7 @@ const PG_DATABASE = process.env.PG_DATABASE || 'nhb_customer_service';
 const PG_USER = process.env.PG_USER || 'postgres';
 const PG_PASSWORD = process.env.PG_PASSWORD || '';
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'sk-57fbd990f89045ddb5795aa9e405d420';
 const DASHSCOPE_EMBEDDING_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 const EMBEDDING_MODEL = 'text-embedding-v3';
 const EMBEDDING_DIMENSION = 1024;

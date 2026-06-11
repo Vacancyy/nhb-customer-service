@@ -6,7 +6,7 @@ config({ path: resolve(process.cwd(), '.env.local') });
 import { Client } from 'ssh2';
 
 const SSH_HOST = process.env.PG_HOST || '192.168.10.187';
-const PASSWORD = process.env.SSH_PASSWORD || '';
+const PASSWORD = 'nhb@2026dev';
 
 // 尝试的用户名列表
 const users = ['root', 'nhb', 'admin', 'postgres', 'ubuntu', 'nhb_admin'];

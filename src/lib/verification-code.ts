@@ -20,8 +20,8 @@ export function generateCode(): string {
 
 // ========== 方法A - 普通短信（已实名用户） ==========
 
-// 存储验证码 - 方法A（Redis，5分钟过期）
-export async function storeCodeA(phone: string, code: string, ttlSeconds: number = 5 * 60): Promise<void> {
+// 存储验证码 - 秒信短信（Redis，5分钟过期）
+export async function storeCodeMiaoXin(phone: string, code: string, ttlSeconds: number = 5 * 60): Promise<void> {
   const client = getRedisClient();
   const key = `${REDIS_KEY_PREFIX.VERIFY_CODE_A}${phone}`;
   const data = JSON.stringify({ code, type: 'A' });
@@ -29,12 +29,12 @@ export async function storeCodeA(phone: string, code: string, ttlSeconds: number
   try {
     await client.setex(key, ttlSeconds, data);
   } catch (error) {
-    console.error('Failed to store code A:', error);
+    logError('存储验证码A失败', error);
   }
 }
 
-// 验证码校验 - 方法A
-export async function verifyCodeA(phone: string, code: string): Promise<boolean> {
+// 验证码校验 - 秒信短信
+export async function verifyCodeMiaoXin(phone: string, code: string): Promise<boolean> {
   const client = getRedisClient();
   const key = `${REDIS_KEY_PREFIX.VERIFY_CODE_A}${phone}`;
 
@@ -49,51 +49,14 @@ export async function verifyCodeA(phone: string, code: string): Promise<boolean>
     await client.del(key);
     return true;
   } catch (error) {
-    console.error('Failed to verify code A:', error);
+    logError('验证码A校验失败', error);
     return false;
   }
 }
-
-// ========== 方法B - 实名短信（未实名用户） ==========
-
-// 存储验证码 - 方法B（Redis，5分钟过期）
-export async function storeCodeB(phone: string, code: string, ttlSeconds: number = 5 * 60): Promise<void> {
-  const client = getRedisClient();
-  const key = `${REDIS_KEY_PREFIX.VERIFY_CODE_B}${phone}`;
-  const data = JSON.stringify({ code, type: 'B' });
-
-  try {
-    await client.setex(key, ttlSeconds, data);
-  } catch (error) {
-    console.error('Failed to store code B:', error);
-  }
-}
-
-// 验证码校验 - 方法B
-export async function verifyCodeB(phone: string, code: string): Promise<boolean> {
-  const client = getRedisClient();
-  const key = `${REDIS_KEY_PREFIX.VERIFY_CODE_B}${phone}`;
-
-  try {
-    const data = await client.get(key);
-    if (!data) return false;
-
-    const stored = JSON.parse(data) as VerificationCode;
-    if (stored.code !== code) return false;
-
-    // 验证成功后删除
-    await client.del(key);
-    return true;
-  } catch (error) {
-    console.error('Failed to verify code B:', error);
-    return false;
-  }
-}
-
 // ========== 短信发送接口 ==========
 
-// 方法A - 发送普通短信（调用秒信短信接口）
-export async function sendSMS_A(phone: string, code: string): Promise<boolean> {
+// 秒信短信 - 发送普通短信（调用秒信短信接口）
+export async function sendSMSMiaoXin(phone: string, code: string): Promise<boolean> {
   try {
     const content = `【智慧医疗】您的验证码是${code}，5分钟内有效，请勿泄露给他人，拒收请回复R`;
     const result = await sendSMS(phone, content);
@@ -112,12 +75,34 @@ export async function sendSMS_A(phone: string, code: string): Promise<boolean> {
   }
 }
 
-// 方法B - 发送实名短信（TODO: 后续对接实名短信接口）
-export async function sendSMS_B(phone: string, code: string): Promise<boolean> {
-  // TODO: 调用实名短信接口（需要三要素验证的短信）
-  // 示例: await smsService.sendWithAuth(phone, `您的验证码是${code}，5分钟内有效`);
-  console.log(`[SMS_B] 发送实名短信到 ${phone}, 验证码: ${code}`);
-  return true;
+
+// ========== 三要素认证数据存储 ==========
+
+// 存储三要素认证返回的数据（Redis，5分钟过期）
+export async function storeThreeElementsData(phone: string, data: unknown, ttlSeconds: number = 5 * 60): Promise<void> {
+  const client = getRedisClient();
+  const key = `${REDIS_KEY_PREFIX.THREE_ELEMENTS_DATA}${phone}`;
+
+  try {
+    await client.setex(key, ttlSeconds, JSON.stringify(data));
+  } catch (error) {
+    logError('存储三要素认证数据失败', error);
+  }
+}
+
+// 获取三要素认证数据
+export async function getThreeElementsData(phone: string): Promise<unknown | null> {
+  const client = getRedisClient();
+  const key = `${REDIS_KEY_PREFIX.THREE_ELEMENTS_DATA}${phone}`;
+
+  try {
+    const data = await client.get(key);
+    if (!data) return null;
+    return JSON.parse(data);
+  } catch (error) {
+    logError('获取三要素认证数据失败', error);
+    return null;
+  }
 }
 
 // ========== 三要素实名认证接口（TODO: 后续对接具体接口） ==========
@@ -125,22 +110,62 @@ export async function sendSMS_B(phone: string, code: string): Promise<boolean> {
 interface ThreeElementsResult {
   success: boolean;
   message: string;
+  data?: unknown;
 }
 
-export async function verifyThreeElements(
+export async function verifyThreeElementsStart(
   name: string,
   idCard: string,
   phone: string
 ): Promise<ThreeElementsResult> {
-  // TODO: 调用第三方三要素实名认证接口
-  // 示例:
-  // const response = await fetch('https://api.example.com/verify', {
-  //   method: 'POST',
-  //   body: JSON.stringify({ name, idCard, phone })
-  // });
-  // return response.json();
+  const verifyUrl = process.env.THREE_ELEMENTS_VERIFY_URL + '/authStart';
+  if (!verifyUrl) {
+    logError('[ThreeElements] 未配置三要素验证接口地址');
+    return { success: false, message: '系统配置错误' };
+  }
 
-  // 开发环境默认返回成功
-  console.log(`[ThreeElements] 验证三要素: ${name}, ${idCard}, ${phone}`);
-  return { success: true, message: '验证通过' };
+  try {
+    const response = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, credentialType: 'IDENTITY_CARD', credentialNumber: idCard, mobile: phone, productSetCode: 'ninghuibaoV6' })
+    });
+    const result = await response.json();
+    if (result.code === 0) {
+      return { success: true, message: '验证通过', data: result.data };
+    } else {
+      return { success: false, message: result.msg || result.message || '验证失败' };
+    }
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : '验证失败';
+    logError(`[ThreeElements] 验证异常: ${errMsg}`);
+    return { success: false, message: errMsg };
+  }
+}
+
+
+// 验证码校验 - 方法B
+export async function verifyThreeElementsResult(flowId: string, code: string): Promise<boolean> {
+  const verifyUrl = process.env.THREE_ELEMENTS_VERIFY_URL + '/checkAuthStatus';
+  if (!verifyUrl) {
+    logError('[ThreeElements] 未配置三要素验证接口地址');
+    return false;
+  }
+  logInfo("[ThreeElements] submit " , { flowId, code })
+  try {
+    const response = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flowId, authCode: code,  productSetCode: 'ninghuibaoV6' })
+    });
+    const result = await response.json();
+    if (result.code === 0) {
+      return true;
+    }
+    logError(`[ThreeElements] 验证异常: ` , result.message);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : '验证失败';
+    logError(`[ThreeElements] 验证异常: ${errMsg}`);
+  }
+  return false;
 }

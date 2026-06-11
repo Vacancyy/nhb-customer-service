@@ -1,33 +1,39 @@
-// JKX MySQL 数据库连接服务
+// CLAIM MySQL 数据库连接服务
 
 import mysql, { Pool, PoolConnection } from 'mysql2/promise';
+import { logInfo, logError } from './logger';
 
-// CLAIM MySQL 配置
-const CLAIM_MYSQL_HOST = process.env.CLAIM_MYSQL_HOST || 'localhost';
-const CLAIM_MYSQL_PORT = parseInt(process.env.CLAIM_MYSQL_PORT || '3306');
-const CLAIM_MYSQL_DATABASE = process.env.CLAIM_MYSQL_DATABASE || 'jkx';
-const CLAIM_MYSQL_USER = process.env.CLAIM_MYSQL_USER || 'root';
-const CLAIM_MYSQL_PASSWORD = process.env.CLAIM_MYSQL_PASSWORD || '';
+// CLAIM MySQL 配置 - 延迟读取环境变量，确保 .env 已加载
+// 注意：Next.js standalone 模式下，server.js 先导入模块再加载 .env
+// 所以不能在模块顶层读取环境变量，否则会使用默认值
 
 // 连接池单例
 let claimPool: Pool | null = null;
 
+function getPoolConfig() {
+  return {
+    host: process.env.CLAIM_MYSQL_HOST || 'localhost',
+    port: parseInt(process.env.CLAIM_MYSQL_PORT || '3306'),
+    database: process.env.CLAIM_MYSQL_DATABASE || 'claim',
+    user: process.env.CLAIM_MYSQL_USER || 'root',
+    password: process.env.CLAIM_MYSQL_PASSWORD || '',
+  };
+}
+
 function getPool(): Pool {
   if (!claimPool) {
+    const config = getPoolConfig();
     claimPool = mysql.createPool({
-      host: CLAIM_MYSQL_HOST,
-      port: CLAIM_MYSQL_PORT,
-      database: CLAIM_MYSQL_DATABASE,
-      user: CLAIM_MYSQL_USER,
-      password: CLAIM_MYSQL_PASSWORD,
+      ...config,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
+      timezone: '+08:00', // 设置时区为北京时间
     });
 
-    console.log('CLAIM MySQL pool created');
+    logInfo('CLAIM MySQL pool created', { host: config.host, database: config.database });
   }
   return claimPool;
 }
@@ -62,7 +68,7 @@ export async function closePool(): Promise<void> {
   if (claimPool) {
     await claimPool.end();
     claimPool = null;
-    console.log('CLAIM MySQL pool closed');
+    logInfo('CLAIM MySQL pool closed');
   }
 }
 

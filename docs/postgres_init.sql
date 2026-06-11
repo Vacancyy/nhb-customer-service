@@ -68,11 +68,27 @@ CREATE TABLE IF NOT EXISTS chat_history (
     channel VARCHAR(50) NOT NULL,
     input TEXT NOT NULL,
     output TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',     -- pending/success/rejected
+    feedback TEXT DEFAULT NULL,                -- 用户反馈内容
+    feedback_at TIMESTAMP DEFAULT NULL,        -- 反馈时间
+    deleted_at TIMESTAMP DEFAULT NULL,         -- 软删除时间
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- 用户+渠道查询索引（常用查询组合）
 CREATE INDEX IF NOT EXISTS idx_chat_history_user_channel ON chat_history(user_id, channel);
+-- 创建时间索引
 CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at);
+-- 状态索引（审核查询）
+CREATE INDEX IF NOT EXISTS idx_chat_history_status ON chat_history(status);
+-- 软删除索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_deleted_at ON chat_history(deleted_at);
+-- 用户+渠道+软删除复合索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_user_channel_deleted ON chat_history(user_id, channel, deleted_at);
+-- 状态+软删除复合索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_status_deleted ON chat_history(status, deleted_at);
+-- 反馈时间索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_feedback_at ON chat_history(feedback_at);
 
 -- ========================================
 -- 用户实名认证表
@@ -93,40 +109,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_user_auth_unique ON user_auth(name, id_car
 CREATE INDEX IF NOT EXISTS idx_user_auth_phone ON user_auth(phone);
 -- 索引：按证件号码查询
 CREATE INDEX IF NOT EXISTS idx_user_auth_id_card ON user_auth(id_card);
-
--- ========================================
--- 会话日志表（审计用）
--- ========================================
-CREATE TABLE IF NOT EXISTS conversation_logs (
-    id SERIAL PRIMARY KEY,
-    session_id VARCHAR(64) NOT NULL,
-    role VARCHAR(20) NOT NULL,
-    content TEXT NOT NULL,
-    intent_plugin VARCHAR(50),
-    period INT,
-    metadata JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_conversation_logs_session_id ON conversation_logs(session_id);
-CREATE INDEX IF NOT EXISTS idx_conversation_logs_created_at ON conversation_logs(created_at);
-
--- ========================================
--- 认证会话表（临时存储认证状态）
--- ========================================
-CREATE TABLE IF NOT EXISTS auth_sessions (
-    id VARCHAR(64) PRIMARY KEY,
-    channel VARCHAR(50) NOT NULL,
-    user_id BIGINT,
-    name VARCHAR(50),
-    id_card VARCHAR(18),
-    phone VARCHAR(11),
-    id_card_hash VARCHAR(64),
-    auth_method VARCHAR(20),
-    authed BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_auth_sessions_phone ON auth_sessions(phone);

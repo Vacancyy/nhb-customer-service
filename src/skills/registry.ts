@@ -54,18 +54,6 @@ export interface ToolHandler {
 
 class ToolRegistry {
   private tools: Map<string, { definition: SkillDefinition; handler: ToolHandler }> = new Map();
-  private context: ToolContext | null = null;
-
-  setContext(context: ToolContext) {
-    this.context = context;
-  }
-
-  getContext(): ToolContext {
-    if (!this.context) {
-      throw new Error('Tool context not set');
-    }
-    return this.context;
-  }
 
   register(definition: SkillDefinition, handler: ToolHandler) {
     this.tools.set(definition.function.name, { definition, handler });
@@ -85,7 +73,7 @@ class ToolRegistry {
     return skill?.definition.auth === true;
   }
 
-  async execute(toolCall: ToolCall): Promise<ToolResult> {
+  async execute(toolCall: ToolCall, context: ToolContext): Promise<ToolResult> {
     const handler = this.getHandler(toolCall.function.name);
     if (!handler) {
       return {
@@ -96,7 +84,6 @@ class ToolRegistry {
 
     try {
       const args = JSON.parse(toolCall.function.arguments);
-      const context = this.getContext();
 
       // 记录 skill 调用开始
       const startTime = new Date();

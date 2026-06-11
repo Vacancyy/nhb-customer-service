@@ -1,5 +1,5 @@
 // 测试阿里云百炼 Embedding API
-const API_KEY = process.env.DASHSCOPE_API_KEY || '';
+const API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
 
 async function testEmbedding() {
   console.log('测试阿里云百炼 Embedding API...');

@@ -60,9 +60,10 @@ export async function saveConversationToHistory(
   userId: bigint,
   channel: string,
   input: string,
-  output: string
-): Promise<void> {
-  await saveConversation(userId, channel, input, output);
+  output: string,
+  status: 'pending' | 'success' | 'rejected' = 'pending'
+): Promise<number> {
+  return saveConversation(userId, channel, input, output, status);
 }
 
 // 获取用户历史会话记录

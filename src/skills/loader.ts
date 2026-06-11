@@ -10,7 +10,7 @@ const knowledgeQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'knowledge_query',
-    description: '从知识库中搜索保险产品信息、条款、常见问题等。当用户询问保险内容、保障范围、投保条件、理赔规则等问题时使用。',
+    description: '从知识库中搜索保险产品信息、条款、常见问题解答等。用于回答知识性问题，如：保障范围、投保条件、理赔流程说明、理赔材料要求、保费标准、免赔额规则等通用信息。注意：这是查询知识库文章，不是查询用户的个人数据。',
     parameters: {
       type: 'object',
       properties: {
@@ -30,7 +30,7 @@ const orderQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'order_query',
-    description: '查询用户的保单订单、购买记录、订单状态、支付信息等。当用户询问订单、保单、购买记录时使用。',
+    description: '查询用户个人的保单订单信息。当用户要查询"我的保单"、"我的订单"、"我买了什么"等个人数据时使用。需要用户实名认证后才能查询。',
     parameters: {
       type: 'object',
       properties: {},
@@ -45,7 +45,7 @@ const claimQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'claim_query',
-    description: '查询理赔进度、理赔材料、理赔流程等。当用户询问理赔相关问题时使用。',
+    description: '查询用户个人的理赔申请进度和状态。当用户要查询"我的理赔进度"、"我的理赔单状态"等个人理赔数据时使用。注意：如果用户只是询问理赔流程、理赔材料要求等知识性问题，应该使用knowledge_query工具，不是这个工具。需要用户实名认证后才能查询。',
     parameters: {
       type: 'object',
       properties: {

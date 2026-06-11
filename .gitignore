@@ -9,9 +9,9 @@ out/
 build/
 dist/
 
-# local env files
+# env files
 .env
-.env*.local
+.env.*
 
 # logs
 logs/

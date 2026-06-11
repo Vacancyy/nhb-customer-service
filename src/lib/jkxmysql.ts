@@ -1,33 +1,40 @@
 // JKX MySQL 数据库连接服务
 
 import mysql, { Pool, PoolConnection } from 'mysql2/promise';
+import { logInfo, logError } from './logger';
 
-// JKX MySQL 配置
-const JKX_MYSQL_HOST = process.env.JKX_MYSQL_HOST || 'localhost';
-const JKX_MYSQL_PORT = parseInt(process.env.JKX_MYSQL_PORT || '3306');
-const JKX_MYSQL_DATABASE = process.env.JKX_MYSQL_DATABASE || 'jkx';
-const JKX_MYSQL_USER = process.env.JKX_MYSQL_USER || 'root';
-const JKX_MYSQL_PASSWORD = process.env.JKX_MYSQL_PASSWORD || '';
+// JKX MySQL 配置 - 延迟读取环境变量，确保 .env 已加载
+// 注意：Next.js standalone 模式下，server.js 先导入模块再加载 .env
+// 所以不能在模块顶层读取环境变量，否则会使用默认值
 
 // 连接池单例
 let jkxPool: Pool | null = null;
 
+function getPoolConfig() {
+  return {
+    host: process.env.JKX_MYSQL_HOST || 'localhost',
+    port: parseInt(process.env.JKX_MYSQL_PORT || '3306'),
+    database: process.env.JKX_MYSQL_DATABASE || 'jkx',
+    user: process.env.JKX_MYSQL_USER || 'root',
+    password: process.env.JKX_MYSQL_PASSWORD || '',
+  };
+}
+
 function getPool(): Pool {
   if (!jkxPool) {
+    const config = getPoolConfig();
+    // 调试日志：显示密码长度和前2个字符（用于排查 # 注释截断问题）
+    const pwdDebug = config.password ? `${config.password.length}chars:${config.password.substring(0,2)}...` : 'empty';
+    logInfo('JKX MySQL pool created', { host: config.host, database: config.database, pwd: pwdDebug });
     jkxPool = mysql.createPool({
-      host: JKX_MYSQL_HOST,
-      port: JKX_MYSQL_PORT,
-      database: JKX_MYSQL_DATABASE,
-      user: JKX_MYSQL_USER,
-      password: JKX_MYSQL_PASSWORD,
+      ...config,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
+      timezone: '+08:00', // 设置时区为北京时间
     });
-
-    console.log('JKX MySQL pool created');
   }
   return jkxPool;
 }
@@ -62,7 +69,7 @@ export async function closePool(): Promise<void> {
   if (jkxPool) {
     await jkxPool.end();
     jkxPool = null;
-    console.log('JKX MySQL pool closed');
+    logInfo('JKX MySQL pool closed');
   }
 }
 

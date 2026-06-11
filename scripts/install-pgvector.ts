@@ -7,7 +7,7 @@ import { Client } from 'ssh2';
 
 const SSH_HOST = process.env.PG_HOST || '192.168.10.187';
 const SSH_USER = 'nhb';
-const SSH_PASSWORD = process.env.SSH_PASSWORD || '';
+const SSH_PASSWORD = 'nhb@2026dev';
 
 console.log(`尝试 SSH 连接 ${SSH_USER}@${SSH_HOST}...`);
 

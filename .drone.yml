@@ -1,0 +1,96 @@
+kind: pipeline
+type: docker
+name: nhb-customer-service
+
+clone:
+  depth: 1
+
+environment:
+  tag: ${tag:-latest}
+
+steps:
+  # ==================== 测试环境 ====================
+  - name: publish_stage
+    image: plugins/docker:v1
+    settings:
+      username: drone
+      password:
+        from_secret: password
+      repo: nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service
+      registry: nexus.njzhyl.cn
+      tags: ${tag}
+      dockerfile: Dockerfile
+      build_args:
+        - PROFILE=stage
+    when:
+      event:
+        - promote
+      target:
+        - stage
+
+  - name: deploy_stage
+    image: appleboy/drone-ssh:v1
+    settings:
+      host: dnat2.njzhyl.cn
+      user: ecs-user
+      key:
+        from_secret: rsa_key
+      port: 200
+      command_timeout: 5m
+      script:
+        - echo ====开始部署（测试环境）====
+        - sudo docker login -u drone -p ${password} https://nexus.njzhyl.cn/repository/njzhyl/
+        - sudo docker rm -f nhb-customer-service || true
+        - sudo docker rmi nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest || true
+        - sudo docker pull nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest
+        - sudo docker run -d --restart=always --name nhb-customer-service -p 3001:3000 -v /data/nhb-customer-service/logs:/app/logs nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest
+        - sudo docker image prune -f
+        - echo ====部署成功====
+    when:
+      event:
+        - promote
+      target:
+        - stage
+
+  # ==================== 生产环境 ====================
+  - name: publish_prod
+    image: plugins/docker:v1
+    settings:
+      username: drone
+      password:
+        from_secret: password
+      repo: nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service
+      registry: nexus.njzhyl.cn
+      tags: ${tag}
+      dockerfile: Dockerfile
+      build_args:
+        - PROFILE=prod
+    when:
+      event:
+        - promote
+      target:
+        - prod
+
+  - name: deploy_prod
+    image: appleboy/drone-ssh:v1
+    settings:
+      host: dnat2.njzhyl.cn
+      user: ecs-user
+      key:
+        from_secret: rsa_key
+      port: 200
+      command_timeout: 5m
+      script:
+        - echo ====开始部署（生产环境）====
+        - sudo docker login -u drone -p ${password} https://nexus.njzhyl.cn/repository/njzhyl/
+        - sudo docker rm -f nhb-customer-service || true
+        - sudo docker rmi nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest || true
+        - sudo docker pull nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest
+        - sudo docker run -d --restart=always --name nhb-customer-service -p 3001:3000 -v /data/nhb-customer-service/logs:/app/logs nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest
+        - sudo docker image prune -f
+        - echo ====部署成功====
+    when:
+      event:
+        - promote
+      target:
+        - prod

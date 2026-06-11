@@ -11,6 +11,7 @@ import {
   UpdateKnowledgeInput,
   KnowledgeQueryParams,
 } from './types';
+import { logInfo } from '../logger';
 
 const TABLE_ENTRIES = 'knowledge_entries';
 const TABLE_ANSWERS = 'knowledge_answers';
@@ -358,9 +359,9 @@ export async function embedKnowledgeById(id: string): Promise<KnowledgeEntry | n
   }
 
   const textToEmbed = entry.retrieval_text || entry.std_question;
-  console.log(`正在对 "${textToEmbed}" 进行向量化...`);
+  logInfo('向量化处理', { text: textToEmbed });
   const embedding = await generateEmbedding(textToEmbed);
-  console.log(`向量化完成，维度: ${embedding.length}`);
+  logInfo('向量化完成', { dimension: embedding.length });
 
   return updateKnowledge(id, { embedding });
 }
@@ -479,6 +480,85 @@ export async function getAllAnswers(knowledgeId: string): Promise<KnowledgeAnswe
     ORDER BY period DESC
   `;
   return query<KnowledgeAnswer>(sql, [knowledgeId]);
+}
+
+// 创建或更新答案（同一条目同期只能有一个答案，使用 UPSERT）
+export async function upsertAnswer(
+  knowledgeId: string,
+  input: CreateKnowledgeAnswerInput
+): Promise<KnowledgeAnswer> {
+  const sql = `
+    INSERT INTO ${TABLE_ANSWERS} (
+      knowledge_id, period, answer, source, std_question_period, valid_from, valid_to
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (knowledge_id, period) DO UPDATE SET
+      answer = EXCLUDED.answer,
+      source = EXCLUDED.source,
+      std_question_period = EXCLUDED.std_question_period,
+      valid_from = EXCLUDED.valid_from,
+      valid_to = EXCLUDED.valid_to
+    RETURNING *
+  `;
+  const row = await queryOne<KnowledgeAnswer>(sql, [
+    knowledgeId,
+    input.period,
+    input.answer,
+    input.source || null,
+    input.std_question_period || null,
+    input.valid_from || null,
+    input.valid_to || null,
+  ]);
+  return row!;
+}
+
+// 删除答案
+export async function deleteAnswer(answerId: number): Promise<boolean> {
+  const sql = `DELETE FROM ${TABLE_ANSWERS} WHERE id = $1 RETURNING id`;
+  const row = await queryOne<{ id: number }>(sql, [answerId]);
+  return row !== null;
+}
+
+// 批量更新答案（先删除旧答案，再插入新答案）
+export async function updateAnswersBatch(
+  knowledgeId: string,
+  answers: CreateKnowledgeAnswerInput[]
+): Promise<KnowledgeAnswer[]> {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    // 删除旧答案
+    await client.query(`DELETE FROM ${TABLE_ANSWERS} WHERE knowledge_id = $1`, [knowledgeId]);
+
+    // 插入新答案
+    const newAnswers: KnowledgeAnswer[] = [];
+    for (const ans of answers) {
+      const answerSql = `
+        INSERT INTO ${TABLE_ANSWERS} (
+          knowledge_id, period, answer, source, std_question_period, valid_from, valid_to
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `;
+      const result = await client.query(answerSql, [
+        knowledgeId,
+        ans.period,
+        ans.answer,
+        ans.source || null,
+        ans.std_question_period || null,
+        ans.valid_from || null,
+        ans.valid_to || null,
+      ]);
+      newAnswers.push(result.rows[0]);
+    }
+
+    await client.query('COMMIT');
+    return newAnswers;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // 检查数据库是否有向量能力

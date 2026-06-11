@@ -4,6 +4,9 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
 
+// 设置时区为中国时区
+process.env.TZ = 'Asia/Shanghai';
+
 // 日志目录
 const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
