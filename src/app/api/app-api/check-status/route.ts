@@ -50,13 +50,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(AjaxResult.error('无权限查看此记录'));
     }
 
-    // 检查审核开关（Redis）
-    const redisClient = getRedisClient();
-    const reviewEnabledKey = `${REDIS_KEY_PREFIX.SYSTEM_CONFIG}review_enabled`;
-    const reviewEnabledValue = await redisClient.get(reviewEnabledKey);
-
-    // 审核开关逻辑：'true' 或 '1' 表示启用审核，其他值（包括不存在）表示禁用审核
-    const reviewEnabled = reviewEnabledValue === 'true' || reviewEnabledValue === '1';
+    // 检查审核开关（Redis）— Redis 不可用时默认审核关闭，保证聊天可用
+    let reviewEnabled = false;
+    try {
+      const redisClient = getRedisClient();
+      const reviewEnabledKey = `${REDIS_KEY_PREFIX.SYSTEM_CONFIG}review_enabled`;
+      const reviewEnabledValue = await redisClient.get(reviewEnabledKey);
+      reviewEnabled = reviewEnabledValue === 'true' || reviewEnabledValue === '1';
+    } catch (redisErr) {
+      logError('Redis 不可用，审核开关默认关闭', { error: redisErr instanceof Error ? redisErr.message : String(redisErr) });
+    }
 
     // 如果审核功能关闭，直接返回数据（不判断状态）
     if (!reviewEnabled) {

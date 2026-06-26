@@ -10,13 +10,13 @@ const knowledgeQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'knowledge_query',
-    description: '从知识库中搜索保险产品信息、条款、常见问题解答等。用于回答知识性问题，如：保障范围、投保条件、理赔流程说明、理赔材料要求、保费标准、免赔额规则等通用信息。注意：这是查询知识库文章，不是查询用户的个人数据。',
+    description: '搜索知识库回答用户关于宁惠保的问题。适用于保障范围、投保条件、理赔流程、保费、免赔额等知识性查询。',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: '用户的查询内容，用于向量搜索知识库',
+          description: '用户的问题关键词',
         },
       },
       required: ['query'],
@@ -30,7 +30,7 @@ const orderQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'order_query',
-    description: '查询用户个人的保单订单信息。当用户要查询"我的保单"、"我的订单"、"我买了什么"等个人数据时使用。需要用户实名认证后才能查询。',
+    description: '查询用户个人保单订单。需要实名认证。',
     parameters: {
       type: 'object',
       properties: {},
@@ -45,7 +45,7 @@ const claimQueryTool: SkillDefinition = {
   type: 'function',
   function: {
     name: 'claim_query',
-    description: '查询用户个人的理赔申请进度和状态。当用户要查询"我的理赔进度"、"我的理赔单状态"等个人理赔数据时使用。注意：如果用户只是询问理赔流程、理赔材料要求等知识性问题，应该使用knowledge_query工具，不是这个工具。需要用户实名认证后才能查询。',
+    description: '查询用户个人理赔进度。如果用户只是问理赔流程、材料等知识性问题，应使用knowledge_query。需要实名认证。',
     parameters: {
       type: 'object',
       properties: {
@@ -55,7 +55,7 @@ const claimQueryTool: SkillDefinition = {
         },
         query_type: {
           type: 'string',
-          description: '查询类型: progress(进度), material(材料), process(流程)',
+          description: '查询类型：进度/材料/流程',
         },
       },
       required: [],

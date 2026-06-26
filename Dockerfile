@@ -32,6 +32,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/server.js ./server.js
+# ws 包由 server.js 使用，但 Next.js standalone 输出不包含它，需手动复制
+COPY --from=builder /app/node_modules/ws ./node_modules/ws
 
 USER nextjs
 EXPOSE 3000

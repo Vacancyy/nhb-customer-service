@@ -8,6 +8,9 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   output: 'standalone',
   basePath: '/nhb-customer-service',
+  experimental: {
+    serverComponentsExternalPackages: ['ws'],
+  },
   webpack: (config) => {
     // 显式配置路径别名，确保 webpack 能正确解析 @/ 导入
     config.resolve.alias = {

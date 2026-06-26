@@ -86,7 +86,7 @@ export default function CustomerServicePage() {
               if (msg.recordId === recordId && msg.type === 'pending') {
                 return {
                   ...msg,
-                  type: 'reply',
+                  type: 'reply' as const,
                   content: output,
                   status: '审核已通过',
                 };
@@ -111,7 +111,7 @@ export default function CustomerServicePage() {
               if (msg.recordId === recordId && msg.type === 'pending') {
                 return {
                   ...msg,
-                  type: 'reply',
+                  type: 'reply' as const,
                   content: '您的提问审核未通过，请重新提问。',
                   status: '审核未通过',
                 };

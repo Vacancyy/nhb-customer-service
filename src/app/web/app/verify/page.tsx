@@ -188,7 +188,15 @@ export default function VerifyPage() {
       )}
 
       <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
-        <h1 className="text-xl font-bold text-center mb-2">实名认证</h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-xl font-bold text-center flex-1">实名认证</h1>
+          <button
+            onClick={() => window.history.back()}
+            className="text-gray-500 hover:text-gray-700 text-sm"
+          >
+            返回
+          </button>
+        </div>
         <p className="text-sm text-gray-500 text-center mb-4">
           为保护您的个人信息安全，查询订单或理赔进度需先完成实名认证
         </p>
@@ -215,7 +223,7 @@ export default function VerifyPage() {
           onChange={setIdCard}
           placeholder="请输入18位身份证号"
           maxLength={18}
-          filter={(v) => v.replace(/\D/g, '').slice(0, 18)}
+          filter={(v) => v.replace(/[^\dXx]/g, '').toUpperCase().slice(0, 18)}
         />
 
         {/* 手机号码 + 发送验证码 */}

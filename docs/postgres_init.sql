@@ -72,7 +72,16 @@ CREATE TABLE IF NOT EXISTS chat_history (
     feedback TEXT DEFAULT NULL,                -- 用户反馈内容
     feedback_at TIMESTAMP DEFAULT NULL,        -- 反馈时间
     deleted_at TIMESTAMP DEFAULT NULL,         -- 软删除时间
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    first_token_time INTEGER DEFAULT NULL,     -- 首字延迟(ms)
+    generation_time INTEGER DEFAULT NULL,      -- 总生成耗时(ms)
+    model_used VARCHAR(50) DEFAULT NULL,       -- 使用的模型名
+    has_tool_calls BOOLEAN DEFAULT FALSE,      -- 是否有工具调用
+    tool_calls_detail JSONB DEFAULT NULL,      -- 工具调用详情
+    prompt_tokens INTEGER DEFAULT NULL,        -- prompt token 数
+    completion_tokens INTEGER DEFAULT NULL,    -- completion token 数
+    total_tokens INTEGER DEFAULT NULL,         -- 总 token 数
+    agent_iterations INTEGER DEFAULT NULL      -- agent loop 迭代次数
 );
 
 -- 用户+渠道查询索引（常用查询组合）
@@ -89,6 +98,12 @@ CREATE INDEX IF NOT EXISTS idx_chat_history_user_channel_deleted ON chat_history
 CREATE INDEX IF NOT EXISTS idx_chat_history_status_deleted ON chat_history(status, deleted_at);
 -- 反馈时间索引
 CREATE INDEX IF NOT EXISTS idx_chat_history_feedback_at ON chat_history(feedback_at);
+-- 工具调用详情索引（GIN 支持 JSON 查询）
+CREATE INDEX IF NOT EXISTS idx_chat_history_tool_calls_detail ON chat_history USING GIN (tool_calls_detail);
+-- 模型索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_model_used ON chat_history (model_used);
+-- 工具调用索引
+CREATE INDEX IF NOT EXISTS idx_chat_history_has_tool_calls ON chat_history (has_tool_calls);
 
 -- ========================================
 -- 用户实名认证表

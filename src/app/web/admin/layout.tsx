@@ -12,6 +12,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { name: '审核管理', path: '/web/admin/review', icon: '📋' },
+  { name: '对话记录', path: '/web/admin/records', icon: '📊' },
   { name: '提示词配置', path: '/web/admin/prompt', icon: '💬' },
   { name: '知识库管理', path: '/web/admin/knowledge', icon: '📚' },
 ];

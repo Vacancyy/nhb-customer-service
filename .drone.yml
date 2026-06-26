@@ -59,7 +59,7 @@ steps:
       username: drone
       password:
         from_secret: password
-      repo: nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service
+      repo: nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service
       registry: nexus.njzhyl.cn
       tags: ${tag}
       dockerfile: Dockerfile
@@ -84,9 +84,9 @@ steps:
         - echo ====开始部署（生产环境）====
         - sudo docker login -u drone -p ${password} https://nexus.njzhyl.cn/repository/njzhyl/
         - sudo docker rm -f nhb-customer-service || true
-        - sudo docker rmi nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest || true
-        - sudo docker pull nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest
-        - sudo docker run -d --restart=always --name nhb-customer-service -p 3001:3000 -v /data/nhb-customer-service/logs:/app/logs nexus.njzhyl.cn/repository/njzhyl/prod/ai/nhb-customer-service:latest
+        - sudo docker rmi nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest || true
+        - sudo docker pull nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest
+        - sudo docker run -d --restart=always --name nhb-customer-service -p 3001:3000 -v /data/nhb-customer-service/logs:/app/logs nexus.njzhyl.cn/repository/njzhyl/stage/ai/nhb-customer-service:latest
         - sudo docker image prune -f
         - echo ====部署成功====
     when:

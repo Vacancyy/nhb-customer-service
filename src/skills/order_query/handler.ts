@@ -53,10 +53,10 @@ const handler: ToolHandler = async (args: Record<string, any>, context: ToolCont
       WHERE o.order_status = 'PAID_SUCCESS'
             AND oic.is_return = 0
             AND ps.product_serial = 'ninghuibao'
-            AND ((b.name = ? AND b.credential_number = ?) OR (c.name = ? AND c.credential_number = ?))
+            AND b.name = ? AND b.credential_number = ?
       ORDER BY o.create_time DESC
       LIMIT 10`,
-      [name, idCard,name, idCard]
+      [name, idCard]
     );
 
     if (orders.length === 0) {
@@ -89,7 +89,7 @@ const handler: ToolHandler = async (args: Record<string, any>, context: ToolCont
     const errMsg = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : '';
     logError(`[order_query] 查询失败: ${errMsg}\n${stack}`);
-    return `订单查询失败: ${errMsg}`;
+    return `订单查询功能暂不可用，建议转人工客服。【请直接告知用户，不要再调用工具】`;
   }
 };
 
