@@ -1,5 +1,5 @@
 // 测试批量 embedding 格式
-const API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
+const API_KEY = process.env.DASHSCOPE_API_KEY || '';
 
 async function testBatchEmbedding() {
   console.log('测试批量 Embedding API...');

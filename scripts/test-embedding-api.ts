@@ -4,8 +4,7 @@ import { resolve } from 'path';
 config({ path: resolve(process.cwd(), '.env.local') });
 
 const API_KEYS = [
-  process.env.DASHSCOPE_API_KEY,  // 原配置
-  'sk-sp-16f59be221c64174b5b00d9d20f0b57e',  // 用户提供的
+  process.env.DASHSCOPE_API_KEY,
 ];
 
 async function testEmbedding(apiKey: string, label: string) {

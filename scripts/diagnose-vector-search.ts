@@ -31,7 +31,7 @@ const failedStdQuestions = [
   '为什么直付没看到赔款？'
 ];
 
-const DASHSCOPE_API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_EMBEDDING_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
 // 生成向量

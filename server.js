@@ -45,7 +45,7 @@ const handle = app.getRequestHandler();
 
 // ========== Token 解密配置 ==========
 
-const AUTH_TOKEN_KEY = process.env.AUTH_TOKEN_KEY || 'nhb_customer_service_default_key_32b!';
+const AUTH_TOKEN_KEY = process.env.AUTH_TOKEN_KEY || '';
 
 function getKey() {
   const key = AUTH_TOKEN_KEY;

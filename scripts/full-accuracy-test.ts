@@ -9,7 +9,7 @@ import fs from 'fs';
 
 // 配置
 const API_BASE = 'http://localhost:3000/nhb-customer-service-api';
-const DASHSCOPE_API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_EMBEDDING_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
 // 数据库连接

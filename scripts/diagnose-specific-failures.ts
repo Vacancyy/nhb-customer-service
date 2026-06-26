@@ -13,7 +13,7 @@ const pool = new Pool({
   password: (process.env.PG_PASSWORD || 'nhb@2026dev').trim()
 });
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_EMBEDDING_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
 async function generateEmbedding(text: string): Promise<number[]> {

@@ -15,7 +15,7 @@ import 'dotenv/config';
 // 配置
 const API_BASE = 'http://localhost:3008/nhb-customer-service-api';
 const CHANNEL_ID = '89c06202-b87c-46fd-b391-b0c59f834ef1';
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
 // 测试结果类型

@@ -1,6 +1,6 @@
 // 阿里云 DashScope 向量嵌入服务
 
-const DASHSCOPE_API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 // OpenAI 兼容模式的嵌入接口
 const DASHSCOPE_EMBEDDING_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 

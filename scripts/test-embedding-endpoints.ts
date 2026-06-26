@@ -1,5 +1,5 @@
 // 测试不同的 DashScope Embedding 端点
-const API_KEY = 'sk-sp-16f59be221c64174b5b00d9d20f0b57e';
+const API_KEY = process.env.DASHSCOPE_API_KEY || '';
 
 const endpoints = [
   {

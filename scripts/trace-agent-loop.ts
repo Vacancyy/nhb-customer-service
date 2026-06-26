@@ -2,7 +2,7 @@
  * 追踪 Agent Loop 详细过程 - 诊断为什么某些问题返回默认错误
  */
 
-const DASHSCOPE_API_KEY = 'sk-57fbd990f89045ddb5795aa9e405d420';
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const DASHSCOPE_CHAT_MODEL = 'qwen-plus';
 const DASHSCOPE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
